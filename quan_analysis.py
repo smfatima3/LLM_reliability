@@ -23,7 +23,6 @@ def parse_all_logs(log_directory):
         final_event = lines[-1]
         is_failure = final_event['event'] == 'EXPERIMENT_FAILURE'
         
-        # Extract the full time-series of metrics
         metrics_history = [line for line in lines if line.get('event') == 'METRICS']
         
         all_runs_data.append({
@@ -40,21 +39,28 @@ def fit_weibull_parameters(all_runs_data):
     for run in all_runs_data:
         if not run['is_failure']: continue
         for metrics in run['metrics_history']:
-            if metrics['lambda'] > 1e-6: all_signals['lambda'].append(metrics['lambda'])
-            if metrics['sigma_sq'] > 1e-6: all_signals['sigma_sq'].append(metrics['sigma_sq'])
-            if metrics['delta_l'] > 1e-6: all_signals['delta_l'].append(metrics['delta_l'])
+            if metrics.get('lambda', 0) > 1e-6: all_signals['lambda'].append(metrics['lambda'])
+            if metrics.get('sigma_sq', 0) > 1e-6: all_signals['sigma_sq'].append(metrics['sigma_sq'])
+            if metrics.get('delta_l', 0) > 1e-6: all_signals['delta_l'].append(metrics['delta_l'])
             
     fitted_params = {}
     for signal_name, data in all_signals.items():
-        if not data:
-            eta, beta = 1.0, 1.0 # Default values
-        else:
-            shape_beta, _, scale_eta = weibull_min.fit(data, floc=0)
-        fitted_params[signal_name] = {'eta': scale_eta, 'beta': shape_beta}
+        # --- THIS IS THE CORRECTED LOGIC ---
+        eta, beta = 1.0, 1.0  # Start with default values
+        if data: # Only try to fit if there is data
+            try:
+                # Use a robust fitting method
+                shape_beta, _, scale_eta = weibull_min.fit(data, floc=0, scale=np.median(data), loc=0)
+                eta = scale_eta
+                beta = shape_beta
+            except Exception as e:
+                print(f"Warning: Could not fit Weibull for '{signal_name}'. Using default params. Error: {e}")
+        
+        fitted_params[signal_name] = {'eta': eta, 'beta': beta}
     return fitted_params
 
 def get_weibull_term(val, eta, beta):
-    if val <= 0: return 0.0
+    if val <= 0 or eta <= 0: return 0.0
     return (val / eta) ** beta
 
 def analyze_performance(all_runs_data, fitted_params, alert_threshold):
@@ -64,9 +70,9 @@ def analyze_performance(all_runs_data, fitted_params, alert_threshold):
         alert_step = None
         for metrics in run['metrics_history']:
             exponent = sum([
-                get_weibull_term(metrics['lambda'], fitted_params['lambda']['eta'], fitted_params['lambda']['beta']),
-                get_weibull_term(metrics['sigma_sq'], fitted_params['sigma_sq']['eta'], fitted_params['sigma_sq']['beta']),
-                get_weibull_term(metrics['delta_l'], fitted_params['delta_l']['eta'], fitted_params['delta_l']['beta'])
+                get_weibull_term(metrics.get('lambda', 0), fitted_params['lambda']['eta'], fitted_params['lambda']['beta']),
+                get_weibull_term(metrics.get('sigma_sq', 0), fitted_params['sigma_sq']['eta'], fitted_params['sigma_sq']['beta']),
+                get_weibull_term(metrics.get('delta_l', 0), fitted_params['delta_l']['eta'], fitted_params['delta_l']['beta'])
             ])
             r_value = np.exp(-exponent)
             if r_value < alert_threshold and alert_step is None:
@@ -111,24 +117,31 @@ def main():
     
     # 1. Statistical Summary (Lead Time)
     detected_failures = results_df[(results_df['is_failure'] == True) & (results_df['alert_step'].notna())].copy()
-    detected_failures['lead_time_steps'] = detected_failures['failure_step'] - detected_failures['alert_step']
-    detected_failures['lead_time_minutes'] = detected_failures['lead_time_steps'] * TIME_PER_STEP_SECONDS / 60.0
-    
-    print("\n1. Statistical Summary (Lead Time):")
-    print(f"  - Mean Lead Time:         {detected_failures['lead_time_minutes'].mean():.2f} minutes")
-    print(f"  - Median Lead Time:       {detected_failures['lead_time_minutes'].median():.2f} minutes")
-    print(f"  - 95th Percentile:        {detected_failures['lead_time_minutes'].quantile(0.95):.2f} minutes")
-    
-    # Cohen's d calculation
-    mean_diff = detected_failures['lead_time_minutes'].mean() - 0.5 # Baseline mean is ~0.5
-    pooled_std = detected_failures['lead_time_minutes'].std()
-    cohens_d = mean_diff / pooled_std if pooled_std > 0 else 0
-    print(f"  - Effect Size (Cohen's d): {cohens_d:.2f}")
+    if not detected_failures.empty:
+        detected_failures['lead_time_steps'] = detected_failures['failure_step'] - detected_failures['alert_step']
+        detected_failures['lead_time_minutes'] = detected_failures['lead_time_steps'] * TIME_PER_STEP_SECONDS / 60.0
+        
+        print("\n1. Statistical Summary (Lead Time):")
+        print(f"  - Mean Lead Time:         {detected_failures['lead_time_minutes'].mean():.2f} minutes")
+        print(f"  - Median Lead Time:       {detected_failures['lead_time_minutes'].median():.2f} minutes")
+        print(f"  - 95th Percentile:        {detected_failures['lead_time_minutes'].quantile(0.95):.2f} minutes")
+        
+        mean_diff = detected_failures['lead_time_minutes'].mean() - 0.5
+        pooled_std = detected_failures['lead_time_minutes'].std()
+        cohens_d = mean_diff / pooled_std if pooled_std > 0 else 0
+        print(f"  - Effect Size (Cohen's d): {cohens_d:.2f}")
+    else:
+        print("\n1. Statistical Summary (Lead Time): No failures detected.")
+
 
     # 2. Cross-scenarios Analysis (Lead Time)
     print("\n2. Cross-scenarios Analysis (Lead Time by Fault Type):")
-    lead_time_by_type = detected_failures.groupby('fault_type')['lead_time_minutes'].mean()
-    print(lead_time_by_type.round(2).to_string())
+    if not detected_failures.empty:
+        lead_time_by_type = detected_failures.groupby('fault_type')['lead_time_minutes'].mean()
+        print(lead_time_by_type.round(2).to_string())
+    else:
+        print("  No detected failures to analyze.")
+
 
     # 3. Classification Result
     print("\n3. Classification Result:")
@@ -136,9 +149,6 @@ def main():
     print(f"  - Recall:                 {core_metrics['recall']:.3f}")
     print(f"  - F1-Score:               {core_metrics['f1']:.3f}")
     print(f"  - False Positive Rate:    {core_metrics['fpr']:.3f}")
-    # Note: ROC-AUC requires scores, not just binary predictions. We'll simulate this.
-    # For the paper, you'd plot the ROC curve based on varying the threshold.
-    # Here we just report the F1 for the chosen threshold.
 
     print("\n" + "="*60)
     print("--- Section 2: Sensitivity & Robustness (for Table 4) ---")
