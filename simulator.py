@@ -10,18 +10,27 @@ from collections import deque
 CONFIG = {
     'experiment_id': 'final_run',
     'model_type': 'GPT-2',
-    'METRIC_MODE': 'FULL_METRIC', # Controls which signals are used. Options: 'FULL_METRIC', 'LAMBDA_ONLY', 'SIGMA_ONLY', 'DELTA_L_ONLY'
+    'METRIC_MODE': 'FULL_METRIC', # This will be set by the run script
     'num_workers': 8,
     'total_training_steps': 5000,
     'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
-    'alert_thresholds': { 'r_metric': 0.55 }
+    'alert_thresholds': { 'r_metric': 0.55 },
+    # --- *** FINAL TUNED WEIGHTS *** ---
+    # Based on the ablation study, we re-balance the weights to lower the False Positive Rate.
+    'r_metric_weights': {
+        'w1_lambda': 0.0,   # Proven to be unhelpful, so it's removed.
+        'w2_sigma_sq': 0.7, # Given higher importance due to better precision.
+        'w3_delta_l': 0.3,  # Kept for its high recall, but with reduced influence.
+    }
 }
 
 class ReliabilityMonitor:
     def __init__(self, config):
         self.config = config
         self.metric_mode = config.get('METRIC_MODE', 'FULL_METRIC')
+        # *** This check is added to ensure the weights exist for all modes ***
+        self.weights = config.get('r_metric_weights', {'w1_lambda': 0, 'w2_sigma_sq': 0, 'w3_delta_l': 0})
         self.hardware_events = deque(maxlen=50)
         self.loss_history = deque(maxlen=100)
         self.lambda_history = deque(maxlen=1000)
@@ -49,24 +58,24 @@ class ReliabilityMonitor:
         if np.isnan(current_val_loss): return 100.0
         if not self.loss_history: self.loss_history.append(current_val_loss); return 0.0
         moving_avg = np.mean([l for l in self.loss_history if not np.isnan(l)])
-        val = current_val_loss - moving_avg; self.loss_history.append(val); self.delta_l_history.append(val); return val
+        val = current_val_loss - moving_avg; self.delta_l_history.append(val); return val
 
     def calculate_r_metric(self, lambda_val, sigma_sq_val, delta_l_val):
-        # This function now uses the METRIC_MODE to decide which calculation to perform
         r_metric = 0.0
+        lambda_norm = self._normalize(lambda_val, self.lambda_history)
+        sigma_sq_norm = self._normalize(sigma_sq_val, self.sigma_sq_history)
+        delta_l_norm = self._normalize(delta_l_val, self.delta_l_history)
+        
         if self.metric_mode == 'FULL_METRIC':
-            # This is a simple weighted sum, which is more robust for simulation
-            # than the Weibull model which requires fitting.
-            lambda_norm = self._normalize(lambda_val, self.lambda_history)
-            sigma_sq_norm = self._normalize(sigma_sq_val, self.sigma_sq_history)
-            delta_l_norm = self._normalize(delta_l_val, self.delta_l_history)
-            r_metric = 0.1 * lambda_norm + 0.45 * sigma_sq_norm + 0.45 * delta_l_norm
+            r_metric = (self.weights['w1_lambda'] * lambda_norm +
+                        self.weights['w2_sigma_sq'] * sigma_sq_norm +
+                        self.weights['w3_delta_l'] * delta_l_norm)
         elif self.metric_mode == 'LAMBDA_ONLY':
-            r_metric = self._normalize(lambda_val, self.lambda_history)
+            r_metric = lambda_norm
         elif self.metric_mode == 'SIGMA_ONLY':
-            r_metric = self._normalize(sigma_sq_val, self.sigma_sq_history)
+            r_metric = sigma_sq_norm
         elif self.metric_mode == 'DELTA_L_ONLY':
-            r_metric = self._normalize(delta_l_val, self.delta_l_history)
+            r_metric = delta_l_norm
         
         return {'r_metric': r_metric}
 
@@ -88,7 +97,6 @@ class TrainingSimulator:
         self.state = {'step': 0, 'training_loss': 5.0, 'active_workers': list(range(config['num_workers'])), 'instability_mode': 'NONE', 'degradation_counter': 0, 'is_crashed': False}
         self.alerts = {}
     def _setup_logger(self):
-        # Logs will be saved into subdirectories based on the metric mode
         log_dir = f"logs_{self.config.get('METRIC_MODE', 'default')}"
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, f"{self.config['experiment_id']}.jsonl"); return open(log_path, 'w')
