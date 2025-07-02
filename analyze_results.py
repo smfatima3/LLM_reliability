@@ -5,7 +5,7 @@ import numpy as np
 from scipy.stats import mannwhitneyu
 
 # --- Configuration ---
-LOG_DIRECTORY = "/content/experiment_logs"
+LOG_DIRECTORY = " /kaggle/working/experiment_logs"
 R_METRIC_THRESHOLD = 0.65 # The critical alert threshold from your config
 TIME_PER_STEP_SECONDS = 5 # Assume each step takes 5 seconds for time conversion
 
