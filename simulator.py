@@ -38,10 +38,6 @@ CONFIG = {
 
 
 class ReliabilityMonitor:
-    """
-    Calculates the components of the R metric (λ, σ², ΔL) and the metric itself.
-    (No changes needed in this class, but included for completeness)
-    """
     def __init__(self, config):
         self.config = config
         self.weights = config['r_metric_weights']
@@ -61,14 +57,11 @@ class ReliabilityMonitor:
         self.hardware_events.append(time.time())
 
     def calculate_lambda(self):
-        # *** MODIFIED FOR MORE REALISTIC SPIKES ***
-        # A single major hardware event should cause a significant, immediate spike.
         if not self.hardware_events:
             val = 0.0
         else:
-            # Simulate a large spike for a recent event, which then decays.
             time_since_last_event = time.time() - self.hardware_events[-1]
-            val = 50.0 * math.exp(-time_since_last_event / 10.0) # Decays over ~30-40s
+            val = 50.0 * math.exp(-time_since_last_event / 10.0)
         self.lambda_history.append(val)
         return val
 
@@ -79,10 +72,12 @@ class ReliabilityMonitor:
         return val
 
     def calculate_delta_l(self, current_val_loss):
+        if np.isnan(current_val_loss):
+            return 100.0
         if not self.loss_history:
             self.loss_history.append(current_val_loss)
             return 0.0
-        moving_avg = np.mean(self.loss_history)
+        moving_avg = np.mean([l for l in self.loss_history if not np.isnan(l)])
         val = current_val_loss - moving_avg
         self.loss_history.append(current_val_loss)
         self.delta_l_history.append(val)
@@ -99,7 +94,6 @@ class ReliabilityMonitor:
 
 
 class FaultInjector:
-    """ No changes needed in this class, but included for completeness """
     def __init__(self, config):
         self.config = config['fault_injection']
         self.triggered = False
@@ -111,49 +105,43 @@ class FaultInjector:
         fault_type = self.config['type']
         params = self.config['params']
         log_message = f"Injecting fault: {fault_type}"
+        
+        # *** FAULTS NOW DAMAGE HEALTH INSTEAD OF CAUSING DIRECT FAILURE ***
         if fault_type == 'NODE_FAILURE':
-            killed_worker = params['worker_to_kill']
+            simulator_state['health'] -= 50 # Significant health drop
+            log_message += " - System health damaged."
+        elif fault_type == 'GRADIENT_EXPLOSION':
+            simulator_state['health'] -= 100 # Catastrophic damage
+            log_message += " - System health critically damaged."
+        elif fault_type == 'LR_SPIKE':
+            severity = params.get('lr_multiplier', 1.0)
+            simulator_state['health'] -= severity * 4 # Damage scales with severity
+            log_message += f" - System health damaged by LR spike."
+        # Other faults can be added here to damage health
+        
+        # The original state changes are still applied
+        if fault_type == 'NODE_FAILURE':
+            killed_worker = params.get('worker_to_kill', 0)
             if killed_worker in simulator_state['active_workers']:
                 simulator_state['active_workers'].remove(killed_worker)
-            log_message += f" - Worker {killed_worker} killed."
-        elif fault_type == 'NETWORK_DEGRADATION':
-            simulator_state['network_delay_ms'] = params['delay_ms']
-            log_message += f" - Network delay set to {params['delay_ms']}ms."
-        elif fault_type == 'GRADIENT_EXPLOSION':
-            simulator_state['pending_grad_explosion'] = True
-            log_message += " - Pending gradient explosion."
         elif fault_type == 'LR_SPIKE':
-            simulator_state['is_lr_spiked'] = True
-            simulator_state['learning_rate'] *= params['lr_multiplier']
-            log_message += f" - LR spiked to {simulator_state['learning_rate']:.6f}."
-        elif fault_type == 'DATA_CORRUPTION':
-            simulator_state['data_corruption_rate'] = params['corruption_rate']
-            log_message += f" - Data corruption rate set to {params['corruption_rate']}."
+             simulator_state['is_lr_spiked'] = True
+
         return simulator_state, log_message
 
 
 class TrainingSimulator:
-    """
-    Main class to run a single training simulation experiment.
-    *** CONTAINS CRITICAL FIXES TO FAILURE LOGIC ***
-    """
     def __init__(self, config):
         self.config = config
         self.monitor = ReliabilityMonitor(config)
         self.injector = FaultInjector(config)
         self.logger = self._setup_logger()
         self.state = {
-            'step': 0,
-            'training_loss': 5.0,
-            'validation_loss': 5.0,
-            'learning_rate': 1e-4,
+            'step': 0, 'training_loss': 5.0, 'validation_loss': 5.0,
             'active_workers': list(range(config['num_workers'])),
-            'network_delay_ms': 0,
-            'pending_grad_explosion': False,
             'is_lr_spiked': False,
-            'data_corruption_rate': 0.0,
-            'is_nan': False,
-            'is_crashed': False
+            'health': 100.0, # *** NEW: Health state ***
+            'is_nan': False, 'is_crashed': False
         }
         self.alerts = {}
 
@@ -167,46 +155,34 @@ class TrainingSimulator:
         self.logger.write(json.dumps(data) + '\n')
 
     def _get_simulated_grad_norms(self):
-        # *** MODIFIED FOR MORE REALISTIC FAULT EFFECTS ***
         if not self.state['active_workers']: return []
         base_norm = 10.0 * math.exp(-self.state['step'] / 2000) + 1.0
-        norms = [random.uniform(base_norm * 0.9, base_norm * 1.1) for _ in self.state['active_workers']]
-        if self.state['pending_grad_explosion']:
-            # Make one worker's gradient explode dramatically
-            norms[random.randint(0, len(norms)-1)] = base_norm * 500
-        if self.state['is_lr_spiked']:
-            # Spiked LR increases gradient noise and variance
-            for i in range(len(norms)): norms[i] *= random.uniform(1.5, 5.0)
+        
+        # *** INSTABILITY NOW SCALES WITH (LACK OF) HEALTH ***
+        instability_factor = 1 + (100 - self.state['health']) / 20.0
+        
+        norms = [random.uniform(base_norm * 0.9, base_norm * 1.1) * instability_factor for _ in self.state['active_workers']]
         return norms
 
     def _update_training_state(self):
-        # *** MODIFIED TO MAKE FAULTS LEAD TO TERMINAL FAILURE ***
         base_loss_decay = math.exp(-self.state['step'] / 3000)
         self.state['training_loss'] = 3.0 * base_loss_decay + random.uniform(0.1, 0.2)
         
-        # Cascading failures
-        if self.state['pending_grad_explosion']:
-            self.state['training_loss'] = float('nan') # Explosion causes NaN
-            self.state['pending_grad_explosion'] = False
-
-        if self.state['is_lr_spiked']:
-            # Loss compounds and grows after LR spike
-            self.state['training_loss'] *= (1.5 + random.uniform(0, 0.5))
-
-        # Reduced worker count destabilizes training
-        if len(self.state['active_workers']) < self.config['num_workers']:
-             self.state['training_loss'] *= 1.1
+        # *** HEALTH DEGRADATION PHASE ***
+        if self.injector.triggered:
+            # System continues to lose health after initial damage
+            self.state['health'] -= 1.5
+        
+        # Low health makes loss worse
+        instability_factor = 1 + (100 - self.state['health']) / 50.0
+        self.state['training_loss'] *= instability_factor
 
         # Check for terminal conditions
-        if np.isnan(self.state['training_loss']) or self.state['training_loss'] > 50:
-            self.state['is_nan'] = True
-        if not self.state['active_workers']:
-            self.state['is_crashed'] = True
+        if self.state['health'] <= 0:
+            self.state['is_nan'] = True # System dies
 
     def run(self):
-        """Runs the entire training simulation loop."""
         self._log({'event': 'EXPERIMENT_START', 'config': self.config})
-
         for step in range(1, self.config['total_training_steps'] + 1):
             self.state['step'] = step
             self.state, fault_log = self.injector.inject(step, self.state)
@@ -214,31 +190,36 @@ class TrainingSimulator:
                 self._log({'step': step, 'event': 'FAULT_INJECTED', 'details': fault_log})
                 if self.config['fault_injection']['type'] == 'NODE_FAILURE':
                     self.monitor.log_hardware_event()
-
+            
             self._update_training_state()
-            if step % self.config['eval_every_n_steps'] == 0 or self.state['is_nan'] or self.state['is_crashed']:
-                self.state['validation_loss'] = self.state['training_loss'] if np.isnan(self.state['training_loss']) else self.state['training_loss'] + random.uniform(0.05, 0.1)
+            
+            # Log metrics every eval step
+            if step % self.config['eval_every_n_steps'] == 0:
+                self.state['validation_loss'] = self.state['training_loss'] + random.uniform(0.05, 0.1)
                 grad_norms = self._get_simulated_grad_norms()
                 lambda_val = self.monitor.calculate_lambda()
                 sigma_sq_val = self.monitor.calculate_sigma_sq(grad_norms)
                 delta_l_val = self.monitor.calculate_delta_l(self.state['validation_loss'])
                 r_metric_data = self.monitor.calculate_r_metric(lambda_val, sigma_sq_val, delta_l_val)
                 self._check_alerts(r_metric_data['r_metric'])
+                
                 log_data = {
-                    'step': step, 'event': 'METRICS', 'training_loss': self.state['training_loss'],
-                    'validation_loss': self.state['validation_loss'], 'grad_norm_mean': np.mean(grad_norms) if grad_norms else 0,
+                    'step': step, 'event': 'METRICS', 'health': self.state['health'],
+                    'training_loss': self.state['training_loss'], 'validation_loss': self.state['validation_loss'],
+                    'grad_norm_mean': np.mean(grad_norms) if grad_norms else 0,
                     'lambda': lambda_val, 'sigma_sq': sigma_sq_val, 'delta_l': delta_l_val,
                     **r_metric_data, 'alerts': self.alerts
                 }
                 self._log(log_data)
             
-            if self.state['is_nan'] or self.state['is_crashed']:
-                end_reason = "NaN Loss" if self.state['is_nan'] else "Worker Crash"
-                self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': end_reason})
+            # Check for failure after logging metrics for that step
+            if self.state['is_nan']:
+                self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Health Depleted"})
                 break
         
-        if not (self.state['is_nan'] or self.state['is_crashed']):
+        if not self.state['is_nan']:
             self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
+        
         self.logger.close()
 
     def _check_alerts(self, r_metric):
