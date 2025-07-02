@@ -8,7 +8,7 @@ from collections import deque
 
 # --- Configuration ---
 CONFIG = {
-    'experiment_id': 'ablation_delta_l_only',
+    'experiment_id': 'ablation_sigma_sq_only',
     'model_type': 'GPT-2',
     'dataset': 'C4-subset',
     'num_workers': 8,
@@ -20,10 +20,10 @@ CONFIG = {
         'params': {}
     },
     'r_metric_weights': {
-        # --- KEY CHANGE: Testing Delta L only ---
+        # --- KEY CHANGE: Testing Sigma^2 only ---
         'w1_lambda': 0.0,
-        'w2_sigma_sq': 0.0,
-        'w3_delta_l': 1.0, # Only this signal is active
+        'w2_sigma_sq': 1.0, # Only this signal is active
+        'w3_delta_l': 0.0,
     },
     'alert_thresholds': {
         'r_metric': 0.55,
@@ -54,10 +54,10 @@ class ReliabilityMonitor:
         val = current_val_loss - moving_avg; self.loss_history.append(val); return val
     
     def calculate_r_metric(self, lambda_val, sigma_sq_val, delta_l_val):
-        # --- KEY CHANGE: R is now based ONLY on the normalized Delta L ---
-        delta_l_norm = self._normalize(delta_l_val, self.delta_l_history)
-        r_metric = delta_l_norm # R is just the normalized drift
-        return {'r_metric': r_metric, 'lambda_norm': 0, 'sigma_sq_norm': 0, 'delta_l_norm': delta_l_norm}
+        # --- KEY CHANGE: R is now based ONLY on the normalized Sigma^2 ---
+        sigma_sq_norm = self._normalize(sigma_sq_val, self.sigma_sq_history)
+        r_metric = sigma_sq_norm # R is just the normalized variance
+        return {'r_metric': r_metric, 'lambda_norm': 0, 'sigma_sq_norm': sigma_sq_norm, 'delta_l_norm': 0}
 
 
 class FaultInjector:
