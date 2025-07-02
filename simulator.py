@@ -182,7 +182,14 @@ class TrainingSimulator:
             self.state['is_nan'] = True # System dies
 
     def run(self):
+        """
+        Runs the entire training simulation loop.
+        *** FINAL FIX: Introduces a 'grace period' for metric detection. ***
+        """
         self._log({'event': 'EXPERIMENT_START', 'config': self.config})
+        
+        point_of_no_return_step = None
+        
         for step in range(1, self.config['total_training_steps'] + 1):
             self.state['step'] = step
             self.state, fault_log = self.injector.inject(step, self.state)
@@ -211,6 +218,24 @@ class TrainingSimulator:
                     **r_metric_data, 'alerts': self.alerts
                 }
                 self._log(log_data)
+            
+            # Check for failure
+            if self.state['is_nan']:
+                # This is the point of no return. Record it if it's the first time.
+                if point_of_no_return_step is None:
+                    point_of_no_return_step = step
+                
+                # Allow the simulation to run for a few more steps in a failed state
+                # to ensure the R metric has time to cross the threshold.
+                # The final failure is recorded after a short delay.
+                if step > point_of_no_return_step + (2 * self.config['eval_every_n_steps']):
+                    self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Health Depleted"})
+                    break
+        
+        if not self.state['is_nan']:
+            self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
+        
+        self.logger.close()
             
             # Check for failure after logging metrics for that step
             if self.state['is_nan']:
