@@ -19,8 +19,8 @@ CONFIG = {
     # --- *** FINAL TUNED WEIGHTS *** ---
     # Based on the ablation study, we re-balance the weights to lower the False Positive Rate.
     'r_metric_weights': {
-        'w1_lambda': 0.1,   # Proven to be unhelpful, so it's removed.
-        'w2_sigma_sq': 0.55, # Given higher importance due to better precision.
+        'w1_lambda': 0.2,   # Proven to be unhelpful, so it's removed.
+        'w2_sigma_sq': 0.6, # Given higher importance due to better precision.
         'w3_delta_l': 0.65,  # Kept for its high recall, but with reduced influence.
     }
 }
