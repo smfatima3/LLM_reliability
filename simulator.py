@@ -21,7 +21,7 @@ CONFIG = {
     'r_metric_weights': {
         'w1_lambda': 0.2,   # Proven to be unhelpful, so it's removed.
         'w2_sigma_sq': 0.65, # Given higher importance due to better precision.
-        'w3_delta_l': 0.78,  # Kept for its high recall, but with reduced influence.
+        'w3_delta_l': 0.9,  # Kept for its high recall, but with reduced influence.
     }
 }
 
