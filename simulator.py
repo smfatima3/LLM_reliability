@@ -25,12 +25,12 @@ CONFIG = {
         }
     },
     'r_metric_weights': {
-        'w1_lambda': 0.40,
-        'w2_sigma_sq': 0.35,
-        'w3_delta_l': 0.25,
+        'w1_lambda': 0.0, # Weight is now 0
+        'w2_sigma_sq': 0.5, # Re-balanced weights
+        'w3_delta_l': 0.5,
     },
     'alert_thresholds': {
-        'r_metric': 0.55, # Using the more sensitive 0.55 threshold
+        'r_metric': 0.55,
         'loss_spike': 3.0,
         'grad_norm': 100.0
     }
@@ -38,35 +38,60 @@ CONFIG = {
 
 
 class ReliabilityMonitor:
-    # This class is correct and requires no changes.
     def __init__(self, config):
-        self.config = config; self.weights = config['r_metric_weights']; self.hardware_events = deque(maxlen=50); self.loss_history = deque(maxlen=100); self.lambda_history = deque(maxlen=1000); self.sigma_sq_history = deque(maxlen=1000); self.delta_l_history = deque(maxlen=1000)
+        self.config = config
+        self.weights = config['r_metric_weights']
+        self.hardware_events = deque(maxlen=50)
+        self.loss_history = deque(maxlen=100)
+        self.lambda_history = deque(maxlen=1000)
+        self.sigma_sq_history = deque(maxlen=1000)
+        self.delta_l_history = deque(maxlen=1000)
+
     def _normalize(self, value, history):
         if not history or len(history) < 2: return 0.0
         min_val, max_val = min(history), max(history)
         if max_val == min_val: return 0.0
         return (value - min_val) / (max_val - min_val)
+
     def log_hardware_event(self): self.hardware_events.append(time.time())
+
     def calculate_lambda(self):
+        # This signal will still be calculated but not used in R
         if not self.hardware_events: val = 0.0
         else: val = 50.0 * math.exp(-(time.time() - self.hardware_events[-1]) / 10.0)
         self.lambda_history.append(val); return val
+
     def calculate_sigma_sq(self, all_worker_grad_norms):
         if not all_worker_grad_norms or len(all_worker_grad_norms) < 2: return 0.0
         val = np.var(all_worker_grad_norms); self.sigma_sq_history.append(val); return val
+
     def calculate_delta_l(self, current_val_loss):
         if np.isnan(current_val_loss): return 100.0
         if not self.loss_history: self.loss_history.append(current_val_loss); return 0.0
         moving_avg = np.mean([l for l in self.loss_history if not np.isnan(l)])
         val = current_val_loss - moving_avg; self.loss_history.append(val); return val
+
     def calculate_r_metric(self, lambda_val, sigma_sq_val, delta_l_val):
-        lambda_norm = self._normalize(lambda_val, self.lambda_history); sigma_sq_norm = self._normalize(sigma_sq_val, self.sigma_sq_history); delta_l_norm = self._normalize(delta_l_val, self.delta_l_history)
-        r_metric = (self.weights['w1_lambda'] * lambda_norm + self.weights['w2_sigma_sq'] * sigma_sq_norm + self.weights['w3_delta_l'] * delta_l_norm)
-        return {'r_metric': r_metric, 'lambda_norm': lambda_norm, 'sigma_sq_norm': sigma_sq_norm, 'delta_l_norm': delta_l_norm}
+        # *** KEY CHANGE: REMOVED THE LAMBDA (HARDWARE) COMPONENT ***
+        # The lambda_term is now effectively zero because its weight is zero.
+        # We now use a normalized weighted sum of only the two model-based signals.
+        
+        sigma_sq_norm = self._normalize(sigma_sq_val, self.sigma_sq_history)
+        delta_l_norm = self._normalize(delta_l_val, self.delta_l_history)
+        
+        # This formula now reflects the ablation
+        r_metric = (self.weights['w2_sigma_sq'] * sigma_sq_norm +
+                    self.weights['w3_delta_l'] * delta_l_norm)
+        
+        return {
+            'r_metric': r_metric,
+            'lambda_norm': 0, # Ignored
+            'sigma_sq_norm': sigma_sq_norm,
+            'delta_l_norm': delta_l_norm
+        }
 
 
 class FaultInjector:
-    # This class is correct and requires no changes.
     def __init__(self, config):
         self.config = config['fault_injection']; self.triggered = False
     def inject(self, step, simulator_state):
@@ -109,12 +134,13 @@ class TrainingSimulator:
     def _update_training_state(self):
         base_loss_decay = math.exp(-self.state['step'] / 3000)
         self.state['training_loss'] = 3.0 * base_loss_decay + random.uniform(0.1, 0.2)
-        if self.state['instability_mode'] == 'LOSS_DIVERGENCE':
-            self.state['training_loss'] += self.state['degradation_counter'] * 0.2 + random.uniform(0, 1)
         if self.state['instability_mode'] != 'NONE':
             self.state['degradation_counter'] += 1
-        if self.state['degradation_counter'] > 4:
-            self.state['is_crashed'] = True
+            if self.state['instability_mode'] == 'LOSS_DIVERGENCE':
+                self.state['training_loss'] += self.state['degradation_counter'] * 0.2 + random.uniform(0, 1.5)
+            failure_probability = (self.state['degradation_counter'] / 20.0) ** 2
+            if random.random() < failure_probability:
+                self.state['is_crashed'] = True
 
     def run(self):
         self._log({'event': 'EXPERIMENT_START', 'config': self.config})
@@ -122,12 +148,9 @@ class TrainingSimulator:
             self.state['step'] = step
             self.state, fault_log = self.injector.inject(step, self.state)
             if fault_log:
-                # *** THIS IS THE CORRECTED LINE ***
                 self._log({'step': step, 'event': 'FAULT_INJECTED', 'details': fault_log})
                 if self.config['fault_injection']['type'] == 'NODE_FAILURE': self.monitor.log_hardware_event()
-            
             self._update_training_state()
-            
             if step % self.config['eval_every_n_steps'] == 0:
                 self.state['validation_loss'] = self.state['training_loss'] + random.uniform(0.05, 0.1)
                 grad_norms = self._get_simulated_grad_norms()
@@ -136,13 +159,10 @@ class TrainingSimulator:
                 self._check_alerts(r_metric_data['r_metric'])
                 log_data = {'step': step, 'event': 'METRICS', 'training_loss': self.state['training_loss'], 'validation_loss': self.state['validation_loss'], 'grad_norm_mean': np.mean(grad_norms) if grad_norms else 0, 'lambda': lambda_val, 'sigma_sq': sigma_sq_val, 'delta_l': delta_l_val, **r_metric_data, 'alerts': self.alerts}
                 self._log(log_data)
-            
             if self.state['is_crashed']:
                 self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Failure Post-Degradation"}); break
-        
         if not self.state['is_crashed']:
             self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
-        
         self.logger.close()
 
     def _check_alerts(self, r_metric):
