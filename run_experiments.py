@@ -7,7 +7,7 @@ from simulator import TrainingSimulator, CONFIG as BASE_CONFIG
 # --- Step 1: Define the Experiment Matrix ---
 
 MODELS = ['GPT-2', 'T5', 'BERT']
-REPETITIONS = [1, 2, 3, 4, 5, 6] # Use seeds or just repetition counts
+REPETITIONS = [1, 2, 3] # Use seeds or just repetition counts
 
 # Faults with severity levels
 SEVERITY_FAULTS = {
