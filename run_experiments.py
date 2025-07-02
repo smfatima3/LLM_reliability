@@ -1,7 +1,7 @@
 import itertools
 import copy
 import os
-from simulator import TrainingSimulator, CONFIG as BASE_CONFIG
+from validation_simulator import TrainingSimulator, CONFIG as BASE_CONFIG
 
 # --- Step 1: Define the Experiment Matrix ---
 
