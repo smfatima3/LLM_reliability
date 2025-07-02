@@ -30,7 +30,7 @@ CONFIG = {
         'w3_delta_l': 0.25,
     },
     'alert_thresholds': {
-        'r_metric': 0.65,
+        'r_metric': 0.65, # This will be overridden by run_experiments.py
         'loss_spike': 3.0,
         'grad_norm': 100.0
     }
@@ -106,20 +106,18 @@ class FaultInjector:
         params = self.config['params']
         log_message = f"Injecting fault: {fault_type}"
         
-        # *** FAULTS NOW DAMAGE HEALTH INSTEAD OF CAUSING DIRECT FAILURE ***
+        # *** KEY CHANGE: Faults do slightly more damage to health ***
         if fault_type == 'NODE_FAILURE':
-            simulator_state['health'] -= 50 # Significant health drop
+            simulator_state['health'] -= 60
             log_message += " - System health damaged."
         elif fault_type == 'GRADIENT_EXPLOSION':
-            simulator_state['health'] -= 100 # Catastrophic damage
+            simulator_state['health'] -= 100
             log_message += " - System health critically damaged."
         elif fault_type == 'LR_SPIKE':
             severity = params.get('lr_multiplier', 1.0)
-            simulator_state['health'] -= severity * 4 # Damage scales with severity
+            simulator_state['health'] -= severity * 5 # Increased damage multiplier
             log_message += f" - System health damaged by LR spike."
-        # Other faults can be added here to damage health
         
-        # The original state changes are still applied
         if fault_type == 'NODE_FAILURE':
             killed_worker = params.get('worker_to_kill', 0)
             if killed_worker in simulator_state['active_workers']:
@@ -140,7 +138,7 @@ class TrainingSimulator:
             'step': 0, 'training_loss': 5.0, 'validation_loss': 5.0,
             'active_workers': list(range(config['num_workers'])),
             'is_lr_spiked': False,
-            'health': 100.0, # *** NEW: Health state ***
+            'health': 100.0,
             'is_nan': False, 'is_crashed': False
         }
         self.alerts = {}
@@ -157,10 +155,7 @@ class TrainingSimulator:
     def _get_simulated_grad_norms(self):
         if not self.state['active_workers']: return []
         base_norm = 10.0 * math.exp(-self.state['step'] / 2000) + 1.0
-        
-        # *** INSTABILITY NOW SCALES WITH (LACK OF) HEALTH ***
         instability_factor = 1 + (100 - self.state['health']) / 20.0
-        
         norms = [random.uniform(base_norm * 0.9, base_norm * 1.1) * instability_factor for _ in self.state['active_workers']]
         return norms
 
@@ -168,18 +163,14 @@ class TrainingSimulator:
         base_loss_decay = math.exp(-self.state['step'] / 3000)
         self.state['training_loss'] = 3.0 * base_loss_decay + random.uniform(0.1, 0.2)
         
-        # *** HEALTH DEGRADATION PHASE ***
         if self.injector.triggered:
-            # System continues to lose health after initial damage
-            self.state['health'] -= 1.5
+            self.state['health'] -= 2.0 # Increased continuous health decay
         
-        # Low health makes loss worse
         instability_factor = 1 + (100 - self.state['health']) / 50.0
         self.state['training_loss'] *= instability_factor
 
-        # Check for terminal conditions
         if self.state['health'] <= 0:
-            self.state['is_nan'] = True # System dies
+            self.state['is_nan'] = True
 
     def run(self):
         """
@@ -231,16 +222,6 @@ class TrainingSimulator:
                 if step > point_of_no_return_step + (2 * self.config['eval_every_n_steps']):
                     self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Health Depleted"})
                     break
-        
-        if not self.state['is_nan']:
-            self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
-        
-        self.logger.close()
-            
-            # Check for failure after logging metrics for that step
-            if self.state['is_nan']:
-                self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Health Depleted"})
-                break
         
         if not self.state['is_nan']:
             self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
