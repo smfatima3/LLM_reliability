@@ -6,7 +6,7 @@ from scipy.stats import weibull_min, mannwhitneyu
 from sklearn.metrics import roc_auc_score, roc_curve
 
 # --- Configuration ---
-LOG_DIRECTORY = "/content/experiment_logs"
+LOG_DIRECTORY = "/kaggle/working/experiment_logs"
 R_ALERT_THRESHOLD = 0.5
 TIME_PER_STEP_SECONDS = 5
 
