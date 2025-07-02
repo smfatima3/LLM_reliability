@@ -1,11 +1,13 @@
 import itertools
 import copy
+import os
+# Make sure the simulator script is named simulator.py
 from simulator import TrainingSimulator, CONFIG as BASE_CONFIG
 
 # --- Step 1: Define the Experiment Matrix ---
 
 MODELS = ['GPT-2', 'T5', 'BERT']
-REPETITIONS = [1, 2, 3,] # Use seeds or just repetition counts
+REPETITIONS = [1, 2, 3] # Use seeds or just repetition counts
 
 # Faults with severity levels
 SEVERITY_FAULTS = {
@@ -26,7 +28,7 @@ SEVERITY_FAULTS = {
     }
 }
 
-# Faults without severity levels
+# Faults without severity levels (these are binary - they happen or they don't)
 SIMPLE_FAULTS = ['NODE_FAILURE', 'GRADIENT_EXPLOSION']
 
 # Control case
@@ -35,30 +37,30 @@ NO_FAULT = 'NONE'
 def main():
     """
     Main function to orchestrate and run all experiments.
+    *** THIS VERSION HAS CORRECTED LOOPING LOGIC ***
     """
     print("--- Starting Full Experimental Suite ---")
     experiment_counter = 0
     all_configs = []
 
     # --- Generate Configs for Faults with Severity ---
-    for model, fault_type, (severity, params), rep in itertools.product(
-        MODELS, SEVERITY_FAULTS.keys(), SEVERITY_FAULTS.items(), REPETITIONS
+    # This loop iterates through each model, fault type, and repetition
+    for model, (fault_type, severities), rep in itertools.product(
+        MODELS, SEVERITY_FAULTS.items(), REPETITIONS
     ):
-        # This check ensures we correctly match fault types with their params
-        if fault_type != list(params.keys())[0]:
-            continue
+        # This inner loop iterates through each severity level for the current fault
+        for severity, params in severities.items():
+            experiment_id = f"run_{experiment_counter:03d}_{model.lower()}_{fault_type.lower()}_{severity}_rep{rep}"
+            
+            config = copy.deepcopy(BASE_CONFIG)
+            config['experiment_id'] = experiment_id
+            config['model_type'] = model
+            config['fault_injection']['type'] = fault_type
+            # Update params based on the specific severity
+            config['fault_injection']['params'].update(params)
 
-        experiment_id = f"run_{experiment_counter:03d}_{model.lower()}_{fault_type.lower()}_{severity}_rep{rep}"
-        
-        config = copy.deepcopy(BASE_CONFIG)
-        config['experiment_id'] = experiment_id
-        config['model_type'] = model
-        config['fault_injection']['type'] = fault_type
-        # Update params based on severity
-        config['fault_injection']['params'].update(list(params.values())[0][severity])
-
-        all_configs.append(config)
-        experiment_counter += 1
+            all_configs.append(config)
+            experiment_counter += 1
 
     # --- Generate Configs for Simple Faults ---
     for model, fault_type, rep in itertools.product(MODELS, SIMPLE_FAULTS, REPETITIONS):
