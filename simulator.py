@@ -15,13 +15,13 @@ CONFIG = {
     'total_training_steps': 5000,
     'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
-    'alert_thresholds': { 'r_metric': 0.55 },
+    'alert_thresholds': { 'r_metric': 0.5 },
     # --- *** FINAL TUNED WEIGHTS *** ---
     # Based on the ablation study, we re-balance the weights to lower the False Positive Rate.
     'r_metric_weights': {
-        'w1_lambda': 0.0,   # Proven to be unhelpful, so it's removed.
-        'w2_sigma_sq': 0.7, # Given higher importance due to better precision.
-        'w3_delta_l': 0.3,  # Kept for its high recall, but with reduced influence.
+        'w1_lambda': 0.2,   # Proven to be unhelpful, so it's removed.
+        'w2_sigma_sq': 0.6, # Given higher importance due to better precision.
+        'w3_delta_l': 0.8,  # Kept for its high recall, but with reduced influence.
     }
 }
 
