@@ -34,15 +34,15 @@ class ReliabilityMonitor:
 
     def calculate_sigma_sq(self, model):
         # This function now expects a DataParallel model
-        if not isinstance(model, nn.DataParallel) or len(model.module.parameters()) == 0:
+        # *** THIS IS THE CORRECTED LINE ***
+        # We convert the generator to a list before checking its length.
+        if not isinstance(model, nn.DataParallel) or len(list(model.module.parameters())) == 0:
             return 0.0
         
         # Collect all gradients from all replicas
         all_grads = []
         for param in model.module.parameters():
             if param.grad is not None:
-                # param.grad is the synced gradient, but we can access replica grads if needed
-                # For simplicity here, we'll use the main grad and add noise to simulate divergence
                 all_grads.append(param.grad.view(-1))
         
         if not all_grads:
@@ -51,7 +51,6 @@ class ReliabilityMonitor:
         full_grad_vector = torch.cat(all_grads)
         # In a real multi-GPU scenario, you'd gather gradients before the all-reduce step.
         # Here, we simulate variance by assuming the collected grad is the mean, and we invent other worker grads.
-        # This simulates what would happen in a real distributed setting.
         mean_grad_norm = torch.linalg.norm(full_grad_vector).item()
         # Simulate 2 workers. One has the correct grad, the other is divergent.
         worker_grads = [mean_grad_norm, mean_grad_norm * np.random.uniform(1.5, 5.0)]
@@ -110,7 +109,6 @@ def main():
     print("Loading model...")
     model = BertForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=2)
     
-    # *** CRITICAL: Use DataParallel for multi-GPU training ***
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs!")
         model = nn.DataParallel(model)
@@ -128,7 +126,6 @@ def main():
     for epoch in range(3):
         model.train()
         for i, batch in enumerate(train_dl):
-            # --- Fault Injection Logic ---
             if epoch == FAULT_INJECTION_EPOCH and i == FAULT_INJECTION_STEP and not fault_injected:
                 print(f"\n{'='*20} INJECTING FAULT AT STEP {global_step} {'='*20}")
                 fault_injected = True
@@ -136,7 +133,6 @@ def main():
             batch = {k: v.to(DEVICE) for k, v in batch.items()}
             outputs = model(**batch)
             loss = outputs.loss
-            # In a multi-GPU setup, loss is a tensor with values for each GPU. We take the mean.
             if isinstance(loss, torch.Tensor) and loss.dim() > 0:
                 loss = loss.mean()
 
@@ -147,27 +143,21 @@ def main():
             
             loss.backward()
 
-            # --- Calculate σ² right after backward pass ---
             sigma_sq_val = 0
             if fault_injected:
-                # Simulate the gradient divergence by calculating sigma_sq
-                # In a real scenario, this would involve custom gradient gathering
                 sigma_sq_val = monitor.calculate_sigma_sq(model)
 
             optimizer.step()
             optimizer.zero_grad()
             global_step += 1
 
-            # Log metrics more frequently around the fault
             if fault_injected and i % 5 == 0:
-                delta_l_val = monitor.calculate_delta_l(loss.item()) # Use training loss as a proxy for drift intra-epoch
+                delta_l_val = monitor.calculate_delta_l(loss.item())
                 r_data = monitor.calculate_r_metric(sigma_sq_val, delta_l_val)
                 log_entry = {'step': global_step, 'event': 'INTRA_EPOCH_METRICS', 'sigma_sq': sigma_sq_val, 'delta_l': delta_l_val, **r_data}
                 with open(LOG_FILE, 'a') as f: f.write(json.dumps(log_entry) + '\n')
                 print(f"Step {global_step} | σ²: {sigma_sq_val:.4f} | ΔL: {delta_l_val:.4f} | R: {r_data['r_metric']:.4f}")
 
-
-        # --- Evaluation at end of epoch ---
         model.eval()
         total_eval_loss = 0
         with torch.no_grad():
@@ -180,7 +170,6 @@ def main():
         
         avg_val_loss = total_eval_loss / len(eval_dl)
         
-        # Final R-Metric for the epoch
         delta_l_val = monitor.calculate_delta_l(avg_val_loss)
         r_data = monitor.calculate_r_metric(sigma_sq_val, delta_l_val)
         if 'alert' not in alerts and r_data['r_metric'] > ALERT_THRESHOLD:
