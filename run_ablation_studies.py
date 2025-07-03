@@ -9,7 +9,7 @@ def main():
     saves the logs into separate, clearly named subdirectories.
     """
     MODELS = ['GPT-2', 'T5', 'BERT']
-    REPETITIONS = [1, 2, 3, 4, 5, 6] # Using 3 repetitions for speed; you can increase if needed
+    REPETITIONS = [1, 2, 3, 4] # Using 3 repetitions for speed; you can increase if needed
     
     # We test all fault types for each mode to ensure a fair comparison
     FAULT_TYPES = ['NODE_FAILURE', 'GRADIENT_EXPLOSION', 'LR_SPIKE', 'DATA_CORRUPTION', 'NONE']
