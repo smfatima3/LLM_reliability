@@ -5,7 +5,7 @@ from simulator import TrainingSimulator, CONFIG as BASE_CONFIG
 
 def main():
     MODELS = ['GPT-2', 'T5', 'BERT']
-    REPETITIONS = [1, 2, 3]
+    REPETITIONS = [1, 2, 3, 4, 5, 6]
     FAULT_TYPES = ['NODE_FAILURE', 'GRADIENT_EXPLOSION', 'LR_SPIKE', 'DATA_CORRUPTION', 'NONE']
     ABLATION_MODES = ['FULL_METRIC', 'LAMBDA_ONLY', 'SIGMA_ONLY', 'DELTA_L_ONLY']
 
