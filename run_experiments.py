@@ -30,7 +30,7 @@ SIMPLE_FAULTS = ['NODE_FAILURE', 'GRADIENT_EXPLOSION']
 NO_FAULT = 'NONE'
 
 # *** KEY CHANGE: Lower the alert threshold to improve sensitivity (recall) ***
-BASE_CONFIG['alert_thresholds']['r_metric'] = 0.55
+BASE_CONFIG['alert_thresholds']['r_metric'] = 0.57
 
 def main():
     """
