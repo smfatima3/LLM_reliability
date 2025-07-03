@@ -15,7 +15,7 @@ CONFIG = {
     'total_training_steps': 5000,
     'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
-    'alert_thresholds': { 'r_metric': 0.7 },
+    'alert_thresholds': { 'r_metric': 0.55 },
     # --- *** FINAL TUNED WEIGHTS *** ---
     # Based on the ablation study, we re-balance the weights to lower the False Positive Rate.
     'r_metric_weights': {
