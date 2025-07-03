@@ -6,7 +6,7 @@ from scipy.stats import mannwhitneyu
 
 # --- Configuration ---
 LOG_DIRECTORY = "/content/experiment_logs"
-R_METRIC_THRESHOLD = 0.60 # The critical alert threshold from your config
+R_METRIC_THRESHOLD = 0.59 # The critical alert threshold from your config
 TIME_PER_STEP_SECONDS = 5 # Assume each step takes 5 seconds for time conversion
 
 def parse_log_file(filepath):
@@ -64,7 +64,7 @@ def analyze_results(results_df):
     fn = len(results_df[(results_df['is_failure'] == True) & (results_df['r_alert_step'].isna())])
     
     # True Negative (TN) is not typically used in F1 score but good to know
-    # tn = len(results_df[(results_df['is_failure'] == False) & (results_df['r_alert_step'].isna())])
+    tn = len(results_df[(results_df['is_failure'] == False) & (results_df['r_alert_step'].isna())])
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
@@ -74,6 +74,7 @@ def analyze_results(results_df):
     print(f"  - True Positives (TP):    {tp}")
     print(f"  - False Positives (FP):   {fp}")
     print(f"  - False Negatives (FN):   {fn}")
+    print(f"  - True Negatives (TN):   {tn}")
     print("-" * 20)
     print(f"  - Precision:              {precision:.3f}")
     print(f"  - Recall:                 {recall:.3f}")
