@@ -11,7 +11,7 @@ CONFIG = {
     'METRIC_MODE': 'DELTA_L_ONLY', # Hard-coding our winning metric
     'num_workers': 8, 'total_training_steps': 5000, 'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
-    'alert_thresholds': { 'r_metric': 0.59 } # Your tuned threshold
+    'alert_thresholds': { 'r_metric': 0.69 } # Your tuned threshold
 }
 
 class ReliabilityMonitor:
