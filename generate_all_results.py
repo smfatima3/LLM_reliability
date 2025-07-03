@@ -46,6 +46,9 @@ def analyze_performance(all_runs_data, alert_threshold):
                 break
         
         last_step = run['metrics_history'][-1]['step'] if run['metrics_history'] else 0
+        
+        # --- THIS IS THE CORRECTED LOGIC ---
+        # Ensure that 'is_failure' and 'fault_type' are correctly passed into the summary
         run_summaries.append({
             'fault_type': run['fault_type'],
             'is_failure': run['is_failure'],
@@ -54,6 +57,8 @@ def analyze_performance(all_runs_data, alert_threshold):
         })
     
     df = pd.DataFrame(run_summaries)
+    
+    # This part of the code will now work correctly because the 'is_failure' column exists
     tp = len(df[(df['is_failure'] == True) & (df['alert_step'].notna())])
     fp = len(df[(df['is_failure'] == False) & (df['alert_step'].notna())])
     fn = len(df[(df['is_failure'] == True) & (df['alert_step'].isna())])
