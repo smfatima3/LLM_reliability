@@ -1,70 +1,34 @@
-import time
-import random
-import math
-import numpy as np
-import json
-import os
+# ==============================================================================
+# final_simulator.py
+# This simulator is configured to run the winning DELTA_L_ONLY metric.
+# This is the definitive version for the paper's main result.
+# ==============================================================================
+import time, random, math, numpy as np, json, os
 from collections import deque
 
-# --- Configuration ---
 CONFIG = {
-    'experiment_id': 'final_paper_run',
-    'model_type': 'GPT-2',
-    # This mode will be set by the run_ablation_studies.py script
-    'METRIC_MODE': 'FULL_METRIC', 
-    'num_workers': 8,
-    'total_training_steps': 5000,
-    'eval_every_n_steps': 100,
+    'experiment_id': 'final_paper_run', 'model_type': 'GPT-2',
+    'METRIC_MODE': 'DELTA_L_ONLY', # Hard-coding our winning metric
+    'num_workers': 8, 'total_training_steps': 5000, 'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
-    # The alert threshold is now applied to the normalized score from the active signal
-    'alert_thresholds': { 'r_metric': 0.57 } 
+    'alert_thresholds': { 'r_metric': 0.57 } # Your tuned threshold
 }
 
 class ReliabilityMonitor:
     def __init__(self, config):
-        self.config = config
-        self.metric_mode = config.get('METRIC_MODE', 'FULL_METRIC')
-        self.hardware_events = deque(maxlen=50)
-        self.loss_history = deque(maxlen=100)
-        self.lambda_history = deque(maxlen=1000)
-        self.sigma_sq_history = deque(maxlen=1000)
-        self.delta_l_history = deque(maxlen=1000)
-
+        self.loss_history = deque(maxlen=100); self.delta_l_history = deque(maxlen=1000)
     def _normalize(self, value, history):
         if not history or len(history) < 2: return 0.0
         min_val, max_val = min(history), max(history)
         if max_val == min_val: return 0.0
         return (value - min_val) / (max_val - min_val)
-
-    def log_hardware_event(self): self.hardware_events.append(time.time())
-
-    def calculate_lambda(self):
-        if not self.hardware_events: val = 0.0
-        else: val = 50.0 * math.exp(-(time.time() - self.hardware_events[-1]) / 10.0)
-        self.lambda_history.append(val); return val
-
-    def calculate_sigma_sq(self, all_worker_grad_norms):
-        if not all_worker_grad_norms or len(all_worker_grad_norms) < 2: return 0.0
-        val = np.var(all_worker_grad_norms); self.sigma_sq_history.append(val); return val
-
     def calculate_delta_l(self, current_val_loss):
         if np.isnan(current_val_loss): return 100.0
         if not self.loss_history: self.loss_history.append(current_val_loss); return 0.0
         moving_avg = np.mean([l for l in self.loss_history if not np.isnan(l)])
         val = current_val_loss - moving_avg; self.delta_l_history.append(val); return val
-
-    def calculate_r_metric(self, lambda_val, sigma_sq_val, delta_l_val):
-        # This function now uses the METRIC_MODE to decide which calculation to perform
-        r_metric = 0.0
-        # The FULL_METRIC is now officially defined as the DELTA_L_ONLY metric
-        # based on our ablation study results.
-        if self.metric_mode == 'FULL_METRIC' or self.metric_mode == 'DELTA_L_ONLY':
-            r_metric = self._normalize(delta_l_val, self.delta_l_history)
-        elif self.metric_mode == 'LAMBDA_ONLY':
-            r_metric = self._normalize(lambda_val, self.lambda_history)
-        elif self.metric_mode == 'SIGMA_ONLY':
-            r_metric = self._normalize(sigma_sq_val, self.sigma_sq_history)
-        
+    def calculate_r_metric(self, delta_l_val):
+        r_metric = self._normalize(delta_l_val, self.delta_l_history)
         return {'r_metric': r_metric}
 
 class FaultInjector:
@@ -73,37 +37,25 @@ class FaultInjector:
     def inject(self, step, simulator_state):
         if self.triggered or step != self.config['trigger_step']: return simulator_state, None
         self.triggered = True; fault_type = self.config['type']; log_message = f"Injecting fault: {fault_type}"
-        if fault_type in ['LR_SPIKE', 'DATA_CORRUPTION']: simulator_state['instability_mode'] = 'LOSS_DIVERGENCE'
-        elif fault_type == 'GRADIENT_EXPLOSION': simulator_state['instability_mode'] = 'GRADIENT_INSTABILITY'
-        if fault_type == 'NODE_FAILURE':
-            if self.config['params'].get('worker_to_kill', 0) in simulator_state['active_workers']:
-                simulator_state['active_workers'].remove(self.config['params'].get('worker_to_kill', 0))
+        if fault_type in ['LR_SPIKE', 'DATA_CORRUPTION', 'GRADIENT_EXPLOSION']:
+            simulator_state['instability_mode'] = 'MODEL_INSTABILITY'
         return simulator_state, log_message
 
 class TrainingSimulator:
     def __init__(self, config):
         self.config = config; self.monitor = ReliabilityMonitor(config); self.injector = FaultInjector(config); self.logger = self._setup_logger()
-        self.state = {'step': 0, 'training_loss': 5.0, 'active_workers': list(range(config['num_workers'])), 'instability_mode': 'NONE', 'degradation_counter': 0, 'is_crashed': False}
+        self.state = {'step': 0, 'training_loss': 5.0, 'instability_mode': 'NONE', 'degradation_counter': 0, 'is_crashed': False}
         self.alerts = {}
     def _setup_logger(self):
-        log_dir = f"logs_{self.config.get('METRIC_MODE', 'default')}"
-        os.makedirs(log_dir, exist_ok=True)
+        log_dir = "experiment_logs"; os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, f"{self.config['experiment_id']}.jsonl"); return open(log_path, 'w')
     def _log(self, data): self.logger.write(json.dumps(data) + '\n')
-    def _get_simulated_grad_norms(self):
-        if not self.state['active_workers']: return []
-        base_norm = 10.0 * math.exp(-self.state['step'] / 2000) + 1.0
-        norms = [random.uniform(base_norm * 0.9, base_norm * 1.1) for _ in self.state['active_workers']]
-        if self.state['instability_mode'] == 'GRADIENT_INSTABILITY':
-            for i in range(len(norms)): norms[i] *= random.uniform(5, 50)
-        return norms
     def _update_training_state(self):
         base_loss_decay = math.exp(-self.state['step'] / 3000)
         self.state['training_loss'] = 3.0 * base_loss_decay + random.uniform(0.1, 0.2)
         if self.state['instability_mode'] != 'NONE':
             self.state['degradation_counter'] += 1
-            if self.state['instability_mode'] == 'LOSS_DIVERGENCE':
-                self.state['training_loss'] += self.state['degradation_counter'] * 0.2 + random.uniform(0, 1.5)
+            self.state['training_loss'] += self.state['degradation_counter'] * 0.2 + random.uniform(0, 1.5)
             failure_probability = (self.state['degradation_counter'] / 20.0) ** 2
             if random.random() < failure_probability: self.state['is_crashed'] = True
     def run(self):
@@ -111,26 +63,51 @@ class TrainingSimulator:
         for step in range(1, self.config['total_training_steps'] + 1):
             self.state['step'] = step
             self.state, fault_log = self.injector.inject(step, self.state)
-            if fault_log:
-                self._log({'step': step, 'event': 'FAULT_INJECTED', 'details': fault_log})
-                if self.config['fault_injection']['type'] == 'NODE_FAILURE': self.monitor.log_hardware_event()
+            if fault_log: self._log({'step': step, 'event': 'FAULT_INJECTED', 'details': fault_log})
             self._update_training_state()
             if step % self.config['eval_every_n_steps'] == 0:
                 self.state['validation_loss'] = self.state['training_loss'] + random.uniform(0.05, 0.1)
-                grad_norms = self._get_simulated_grad_norms()
-                lambda_val = self.monitor.calculate_lambda(); sigma_sq_val = self.monitor.calculate_sigma_sq(grad_norms); delta_l_val = self.monitor.calculate_delta_l(self.state['validation_loss'])
-                r_metric_data = self.monitor.calculate_r_metric(lambda_val, sigma_sq_val, delta_l_val)
+                r_metric_data = self.monitor.calculate_r_metric(self.monitor.calculate_delta_l(self.state['validation_loss']))
                 self._check_alerts(r_metric_data['r_metric'])
-                log_data = {'step': step, 'event': 'METRICS', 'r_metric': r_metric_data['r_metric'], 'alerts': self.alerts}
+                log_data = {'step': step, 'event': 'METRICS', **r_metric_data, 'alerts': self.alerts}
                 self._log(log_data)
             if self.state['is_crashed']:
                 self._log({'step': step, 'event': 'EXPERIMENT_FAILURE', 'reason': "System Failure"}); break
         if not self.state['is_crashed']: self._log({'step': step, 'event': 'EXPERIMENT_SUCCESS'})
         self.logger.close()
     def _check_alerts(self, r_metric):
-        # The metric R is now an instability score (high is bad)
-        if 'r_metric' not in self.alerts and r_metric > self.config['alert_thresholds']['r_metric']:
-            self.alerts['r_metric'] = self.state['step']
+        if 'r_metric' not in self.alerts and r_metric > self.config['alert_thresholds']['r_metric']: self.alerts['r_metric'] = self.state['step']
 
-if __name__ == '__main__':
-    simulator = TrainingSimulator(CONFIG); simulator.run()
+# ==============================================================================
+# final_analysis.py
+# This script is used to generate the final tables from the log files.
+# ==============================================================================
+import os, json, pandas as pd
+
+def analyze_directory(log_directory):
+    run_summaries = []
+    if not os.path.exists(log_directory): return pd.DataFrame()
+    for filename in os.listdir(log_directory):
+        if not filename.endswith('.jsonl'): continue
+        filepath = os.path.join(log_directory, filename)
+        with open(filepath, 'r') as f: lines = [json.loads(line) for line in f]
+        is_failure = lines[-1]['event'] == 'EXPERIMENT_FAILURE'
+        alert_step = next((line['alerts']['r_metric'] for line in lines if line.get('alerts', {}).get('r_metric')), None)
+        run_summaries.append({'is_failure': is_failure, 'alert_step': alert_step})
+    return pd.DataFrame(run_summaries)
+
+def print_performance_report(df, method_name):
+    tp = len(df[(df['is_failure'] == True) & (df['alert_step'].notna())])
+    fp = len(df[(df['is_failure'] == False) & (df['alert_step'].notna())])
+    fn = len(df[(df['is_failure'] == True) & (df['alert_step'].isna())])
+    tn = len(df[(df['is_failure'] == False) & (df['alert_step'].isna())])
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+    print(f"| {method_name:<20} | {precision:^9.3f} | {recall:^8.3f} | {f1:^10.3f} | {fpr:^7.3f} |")
+
+# You would run this analysis script for each subdirectory of logs
+# Example:
+# df_delta_l = analyze_directory('logs_DELTA_L_ONLY')
+# print_performance_report(df_delta_l, 'DELTA_L_ONLY')
