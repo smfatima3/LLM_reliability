@@ -5,7 +5,7 @@ import numpy as np
 from scipy.stats import weibull_min, mannwhitneyu
 
 # --- Configuration ---
-LOG_DIRECTORY = "/kaggle/working/experiment_logs"
+LOG_DIRECTORY = "/content/experiment_logs"
 R_ALERT_THRESHOLD = 0.5
 TIME_PER_STEP_SECONDS = 5
 # --- Baseline Thresholds (empirically chosen for best performance) ---
