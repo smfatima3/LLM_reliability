@@ -6,7 +6,7 @@ from simulator import TrainingSimulator, CONFIG as BASE_CONFIG
 # --- Step 1: Define the Experiment Matrix ---
 
 MODELS = ['GPT-2', 'T5', 'BERT']
-REPETITIONS = [1, 2, 3]
+REPETITIONS = [1, 2, 3, 4, 5, 6]
 
 SEVERITY_FAULTS = {
     'LR_SPIKE': {
