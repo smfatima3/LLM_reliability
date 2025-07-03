@@ -17,7 +17,7 @@ CONFIG = {
     'eval_every_n_steps': 100,
     'fault_injection': { 'type': 'NODE_FAILURE', 'trigger_step': 2500, 'params': {} },
     # The alert threshold is now applied to the normalized score from the active signal
-    'alert_thresholds': { 'r_metric': 0.58 } 
+    'alert_thresholds': { 'r_metric': 0.65 } 
 }
 
 class ReliabilityMonitor:
