@@ -6,7 +6,7 @@ from scipy.stats import mannwhitneyu
 
 # --- Configuration ---
 # *** CRITICAL: Set this to the parent directory where your 'logs_*' folders are located. ***
-BASE_LOG_PATH = "/content/logs_FULL_METRIC" 
+BASE_LOG_PATH = "/content/" 
 
 TIME_PER_STEP_SECONDS = 5
 FINAL_METRIC_THRESHOLD = 0.57
