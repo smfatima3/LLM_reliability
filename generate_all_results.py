@@ -5,19 +5,25 @@ import numpy as np
 from scipy.stats import mannwhitneyu
 
 # --- Configuration ---
+# *** CRITICAL: Set this to the parent directory where your 'logs_*' folders are located. ***
+BASE_LOG_PATH = "/content/logs_FULL_METRIC" 
+
 TIME_PER_STEP_SECONDS = 5
 FINAL_METRIC_THRESHOLD = 0.57
 
 def parse_log_directory(log_directory):
     """Parses all log files in a single directory into a list of structured run data."""
     all_runs_data = []
-    if not os.path.exists(log_directory):
-        print(f"Warning: Directory not found, skipping: {log_directory}")
+    # Use the BASE_LOG_PATH to construct the full path
+    full_path = os.path.join(BASE_LOG_PATH, log_directory)
+    
+    if not os.path.exists(full_path):
+        print(f"Warning: Directory not found, skipping: {full_path}")
         return all_runs_data
 
-    for filename in os.listdir(log_directory):
+    for filename in os.listdir(full_path):
         if not filename.endswith('.jsonl'): continue
-        filepath = os.path.join(log_directory, filename)
+        filepath = os.path.join(full_path, filename)
         with open(filepath, 'r') as f:
             try:
                 lines = [json.loads(line) for line in f]
@@ -40,10 +46,7 @@ def parse_log_directory(log_directory):
     return all_runs_data
 
 def analyze_performance(all_runs_data, alert_threshold):
-    """
-    Analyzes performance for a given set of runs and a specific alert threshold.
-    This version contains the fix for the KeyError.
-    """
+    """Analyzes performance for a given set of runs and a specific alert threshold."""
     run_summaries = []
     if not all_runs_data:
         return pd.DataFrame()
@@ -53,13 +56,10 @@ def analyze_performance(all_runs_data, alert_threshold):
         for metrics in run['metrics_history']:
             if metrics.get('r_metric', 0) > alert_threshold and alert_step is None:
                 alert_step = metrics.get('step')
-                # Do not break here, allow loop to finish to get the last step
+                # Don't break here, we need the last step for failure time
         
         last_step = run['metrics_history'][-1].get('step') if run['metrics_history'] else 0
         
-        # --- THIS IS THE CORRECTED LOGIC ---
-        # We explicitly carry over all necessary keys into the summary dictionary
-        # before creating the DataFrame. This prevents the KeyError.
         run_summaries.append({
             'fault_type': run['fault_type'],
             'is_failure': run['is_failure'],
@@ -115,24 +115,28 @@ def main():
     print_performance_report(results_delta_l, 'DELTA_L_ONLY')
     print("="*70)
     
-    # --- Detailed Analysis of the Winning Metric (DELTA_L_ONLY) ---
+    # --- Detailed Analysis of the Winning Metric ---
     print("\n" + "="*70)
     print("--- Detailed Analysis of Final Metric (DELTA_L_ONLY) ---")
     print("="*70)
     
     final_df = results_delta_l
     
-    # 1. Statistical Summary (Lead Time)
+    if final_df.empty:
+        print("No data found for DELTA_L_ONLY. Cannot perform detailed analysis.")
+        return
+        
+    # Statistical Summary (Lead Time)
     detected_failures = final_df[(final_df['is_failure'] == True) & (final_df['alert_step'].notna())].copy()
     if not detected_failures.empty:
         detected_failures['lead_time_steps'] = detected_failures['failure_step'] - detected_failures['alert_step']
         detected_failures['lead_time_minutes'] = detected_failures['lead_time_steps'] * TIME_PER_STEP_SECONDS / 60.0
         
-        print("\n1. Statistical Summary (Lead Time):")
+        print("\nStatistical Summary (Lead Time):")
         print(f"  - Mean Lead Time:         {detected_failures['lead_time_minutes'].mean():.2f} minutes")
         print(f"  - Median Lead Time:       {detected_failures['lead_time_minutes'].median():.2f} minutes")
     else:
-        print("\n1. Statistical Summary (Lead Time): No failures detected to analyze.")
+        print("\nStatistical Summary (Lead Time): No failures detected to analyze.")
 
 if __name__ == "__main__":
     main()
