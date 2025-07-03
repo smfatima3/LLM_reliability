@@ -25,5 +25,5 @@ def print_performance_report(df, method_name):
 
 # You would run this analysis script for each subdirectory of logs
 # Example:
-# df_delta_l = analyze_directory('logs_DELTA_L_ONLY')
-# print_performance_report(df_delta_l, 'DELTA_L_ONLY')
+df_delta_l = analyze_directory('logs_DELTA_L_ONLY')
+print_performance_report(df_delta_l, 'DELTA_L_ONLY')
