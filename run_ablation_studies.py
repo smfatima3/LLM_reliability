@@ -19,9 +19,9 @@ def main():
 
     # Define the configurations for each mode
     mode_configs = {
-        'FULL_METRIC': {'METRIC_MODE': 'FULL_METRIC', 'r_metric_weights': {'w_sigma': 0.5, 'w_delta': 0.78}, 'alert_thresholds': {'r_metric': 0.57}},
+        'FULL_METRIC': {'METRIC_MODE': 'FULL_METRIC', 'r_metric_weights': {'w_sigma': 0.5, 'w_delta': 0.78}, 'alert_thresholds': {'r_metric': 0.45}},
         'LAMBDA_ONLY': {'METRIC_MODE': 'LAMBDA_ONLY', 'alert_thresholds': {'r_metric': 0.57}},
-        'SIGMA_ONLY': {'METRIC_MODE': 'SIGMA_ONLY', 'alert_thresholds': {'r_metric': 0.57}},
+        'SIGMA_ONLY': {'METRIC_MODE': 'SIGMA_ONLY', 'alert_thresholds': {'r_metric': 0.45}},
         'DELTA_L_ONLY': {'METRIC_MODE': 'DELTA_L_ONLY', 'alert_thresholds': {'r_metric': 0.57}}
     }
 
