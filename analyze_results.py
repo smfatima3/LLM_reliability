@@ -6,7 +6,7 @@ from scipy.stats import mannwhitneyu
 
 # --- Configuration ---
 LOG_DIRECTORY = "/content/experiment_logs"
-R_METRIC_THRESHOLD = 0.60 # The critical alert threshold from your config
+R_METRIC_THRESHOLD = 0.56 # The critical alert threshold from your config
 TIME_PER_STEP_SECONDS = 5 # Assume each step takes 5 seconds for time conversion
 
 def parse_log_file(filepath):
