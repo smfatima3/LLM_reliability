@@ -11,7 +11,7 @@ def main():
     """
     # 1. Updated with Modern Architectures
     MODELS = ['Llama-3-8B', 'Mistral-7B', 'GPT-4-MoE']
-    REPETITIONS = [1, 2, 3, 4, 5, 6, 7, 8] # Reduced repetitions for a quicker example run
+    REPETITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] # Reduced repetitions for a quicker example run
     
     # 2. Updated with Modern and Classic Fault Types for broad coverage
     FAULT_TYPES = [
