@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 # --- Configuration ---
-LOG_DIRECTORY = "logs_FULL_METRIC" # We are analyzing our winning metric
+LOG_DIRECTORY = "logs_DELTA_L_ONLY" # We are analyzing our winning metric
 FINAL_METRIC_THRESHOLD = 0.57
 TIME_PER_STEP_SECONDS = 5
 ACCELERATOR_COST_PER_HOUR = 2.50
