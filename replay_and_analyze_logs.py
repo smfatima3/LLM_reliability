@@ -13,7 +13,6 @@ LOG_FILES_TO_ANALYZE = [
     "/kaggle/working/LLM_reliability/run_002_gpt4_moe_expert_failure.jsonl", 
     "/kaggle/working/LLM_reliability/run_001_llama3_router_imbalance (2).jsonl"
 ]
-
 # --- Corrected R-Metric Class (from our validated methodology) ---
 class CorrectedRMetric:
     """
@@ -95,10 +94,12 @@ def replay_and_plot_log(log_file: str):
     # 2. Replay the log through our R-Metric logic
     r_metric_calculator = CorrectedRMetric()
     replay_results = []
+    
+    # *** FIX: Use .get() to handle potentially missing keys gracefully ***
     for index, row in df.iterrows():
-        # Use .get() to handle potentially missing keys gracefully
         lambda_val = row.get('lambda', 0)
-        sigma_val = row.get('sigma_sq', 0)
+        # Handle both 'sigma_sq' and 'sigma_squared' as possible keys
+        sigma_val = row.get('sigma_sq', row.get('sigma_squared', 0)) 
         delta_val = row.get('delta_l', 0)
         
         r_metric = r_metric_calculator.calculate_r_metric(lambda_val, sigma_val, delta_val)
@@ -119,12 +120,16 @@ def replay_and_plot_log(log_file: str):
     axes[0].set_ylabel('Loss')
     
     # Plot 2: Key Raw Signals (Sigma and Delta)
-    sns.lineplot(x='step', y='sigma_sq', data=df, ax=axes[1], label='Gradient Variance (σ²)', color='C1')
-    ax2_twin = axes[1].twinx()
-    sns.lineplot(x='step', y='delta_l', data=df, ax=ax2_twin, label='Loss Drift (ΔL)', color='C2')
-    axes[1].set_ylabel('Gradient Variance', color='C1')
-    ax2_twin.set_ylabel('Loss Drift', color='C2')
+    # *** FIX: Check if columns exist before plotting ***
+    if 'sigma_sq' in df.columns:
+        sns.lineplot(x='step', y='sigma_sq', data=df, ax=axes[1], label='Gradient Variance (σ²)', color='C1')
+        axes[1].set_ylabel('Gradient Variance', color='C1')
     
+    if 'delta_l' in df.columns:
+        ax2_twin = axes[1].twinx()
+        sns.lineplot(x='step', y='delta_l', data=df, ax=ax2_twin, label='Loss Drift (ΔL)', color='C2')
+        ax2_twin.set_ylabel('Loss Drift', color='C2')
+
     # Plot 3: Replayed R-Metric
     sns.lineplot(x='step', y='replayed_r_metric', data=df, ax=axes[2], label='R-Metric', color='green')
     axes[2].axhline(y=r_metric_calculator.base_threshold, color='darkred', linestyle='--', lw=2, label=f'Alert Threshold ({r_metric_calculator.base_threshold})')
