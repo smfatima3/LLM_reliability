@@ -10,8 +10,8 @@ from typing import Dict, Tuple
 # --- Configuration ---
 # TODO: Update this list with the names of your two historical failure log files.
 LOG_FILES_TO_ANALYZE = [
-    "run_002_gpt4_moe_expert_failure.jsonl", 
-    "run_001_llama3_router_imbalance (2).jsonl"
+    "/kaggle/working/LLM_reliability/run_002_gpt4_moe_expert_failure.jsonl", 
+    "/kaggle/working/LLM_reliability/run_001_llama3_router_imbalance (2).jsonl"
 ]
 
 # --- Corrected R-Metric Class (from our validated methodology) ---
