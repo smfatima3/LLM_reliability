@@ -1,0 +1,65 @@
+Starting experiment: case_study_20250719_105228
+Configuration: {
+  "model_name": "Qwen/Qwen3-1.7B",
+  "dataset_name": "imdb",
+  "dataset_config": null,
+  "max_steps": 100,
+  "eval_every_n_steps": 10,
+  "batch_size": 1,
+  "learning_rate": 5e-05,
+  "warmup_steps": 50,
+  "max_seq_length": 256,
+  "gradient_accumulation_steps": 1,
+  "fault_injection_step": 50,
+  "fault_type": "LR_SPIKE",
+  "lr_spike_factor": 15.0,
+  "lr_spike_duration": 20,
+  "r_metric_alert_threshold": 0.6,
+  "r_metric_weights": {
+    "lambda": 0.0,
+    "sigma_sq": 0.52,
+    "delta_l": 0.78
+  },
+  "loss_history_window": 10,
+  "gradient_history_window": 20,
+  "hardware_event_window": 50,
+  "output_dir": "case_study_results",
+  "experiment_name": "case_study_20250719_105228",
+  "device": "cpu",
+  "mixed_precision": true,
+  "use_cpu": true,
+  "output_path": "case_study_results/case_study_20250719_105228"
+}
+Loading model: Qwen/Qwen3-1.7B
+Failed to load tokenizer for Qwen/Qwen3-1.7B: Tokenizer class Qwen2Tokenizer does not exist or is not currently imported.
+Falling back to GPT-2 tokenizer
+Failed to load Qwen/Qwen3-1.7B: 'qwen3'
+Falling back to GPT-2 model
+Loading dataset: imdb
+Starting training...
+Using device: cpu
+Model: GPT2LMHeadModel
+R-METRIC ALERT at step 30: 0.780
+FAULT INJECTED: LR spiked from 5.00e-05 to 7.50e-04
+FAULT RECOVERED: LR restored to 5.00e-05
+Training completed!
+Metrics saved to case_study_results/case_study_20250719_105228/metrics.csv
+Results saved to case_study_results/case_study_20250719_105228/results.json
+Summary:
+{
+  "experiment_name": "case_study_20250719_105228",
+  "model": "Qwen/Qwen3-1.7B",
+  "total_steps": 100,
+  "fault_type": "LR_SPIKE",
+  "fault_step": 50,
+  "alerts": {
+    "r_metric": 30,
+    "simple_heuristic": null,
+    "loss_spike": null,
+    "isolation_forest": null,
+    "gradient_monitoring": null
+  },
+  "alert_lead_times": {
+    "r_metric": 20
+  }
+}

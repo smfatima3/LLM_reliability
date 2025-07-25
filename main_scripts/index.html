@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Proactive Reliability Metric for Detecting Failures in Language Model Training</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+        }
+        h1, h2, h3 {
+            font-weight: 600;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        h1 { font-size: 2.25rem; }
+        h2 { font-size: 1.875rem; }
+        h3 { font-size: 1.5rem; }
+        code {
+            background-color: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.9em;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        pre {
+            background-color: #1e293b;
+            color: #f8fafc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        ul, ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        li {
+            margin-bottom: 0.5rem;
+        }
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .no-print {
+                display: none;
+            }
+            main {
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="no-print fixed top-4 right-4">
+        <button onclick="window.print()" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+            Print to PDF
+        </button>
+    </div>
+
+    <main class="max-w-4xl mx-auto p-8 lg:p-12 bg-white shadow-lg my-8 rounded-lg">
+        <h1>A Proactive Reliability Metric for Detecting Failures in Language Model Training</h1>
+        <p>This repository contains the source code and experimental scripts for the EMNLP 2025 Industry Track paper, "A Proactive Reliability Metric for Detecting Failures in Language Model Training." The project introduces and validates a dynamic reliability metric (R-Metric) for the early detection of failures in large language model training.</p>
+        
+        <h2>Overview</h2>
+        <p>The goal of this work is to move beyond reactive fault tolerance (e.g., checkpointing) towards a proactive paradigm that can predict training instability before it becomes catastrophic. We introduce the R-Metric, a composite score that integrates signals from the hardware level (&lambda;), training dynamics (&sigma;<sup>2</sup>), and model performance (&Delta;L) to provide a holistic assessment of training health.</p>
+        <p>This repository provides the scripts to:</p>
+        <ol class="list-decimal">
+            <li>Run a systematic simulation study (720 runs) across modern architectures (Llama-3, Mistral, GPT-4-MoE) to validate the R-Metric's performance.</li>
+            <li>Analyze the results and generate all tables and figures presented in the paper.</li>
+            <li>Reproduce the real-world case study on a Qwen-2.5 3B model to demonstrate the metric's practical application.</li>
+        </ol>
+
+        <h2>Repository Structure</h2>
+        <ul class="list-disc">
+            <li><code>simulator.py</code>: The core simulation environment that models the LLM training process and can inject various faults.</li>
+            <li><code>run_modern_experiments.py</code>: The main script to execute the full 720-run simulation study across all defined architectures and fault types.</li>
+            <li><code>generate_paper_tables.py</code>: Analyzes the simulation logs to generate the final results tables (Table 1, 3, 4) for the paper, including the Isolation Forest baseline comparison.</li>
+            <li><code>generate_all_figures.py</code>: Generates all figures (1-5) for the paper from simulation logs and conceptual designs.</li>
+            <li><code>run_case_study.py</code>: The self-contained script to run the real-world validation case study using a Qwen-2.5 3B model and native PyTorch.</li>
+            <li><code>replay_and_analyze_logs.py</code>: A utility script to analyze historical or existing <code>.jsonl</code> log files and generate case study plots.</li>
+            <li><code>logs_FULL_METRIC/</code>: Directory containing log files from the simulation runs (sample provided).</li>
+            <li><code>README.md</code>: This file.</li>
+            <li><code>requirements.txt</code>: A list of all Python dependencies required to run the code.</li>
+        </ul>
+
+        <h2>How to Reproduce Results</h2>
+        <p>To reproduce the findings in the paper, follow these steps in order:</p>
+        
+        <h3>Step 1: Install Dependencies</h3>
+        <p>First, install all the required Python libraries from the <code>requirements.txt</code> file. It is recommended to use a virtual environment.</p>
+        <pre><code>pip install -r requirements.txt</code></pre>
+        <p><em>Note: The <code>graphviz</code> library also requires a system-level installation. On Debian/Ubuntu, run <code>sudo apt-get install graphviz</code>.</em></p>
+
+        <h3>Step 2: Run the Simulation Study</h3>
+        <p>Execute the main experiment script. This will generate the log files for all 720 runs and save them into subdirectories (e.g., <code>logs_FULL_METRIC/</code>).</p>
+        <pre><code>python run_modern_experiments.py</code></pre>
+        <p><em>(This is a long-running process and will take a significant amount of time to complete.)</em></p>
+
+        <h3>Step 3: Generate Paper Tables</h3>
+        <p>Once the simulations are complete, run the analysis script to generate the performance tables from the logs.</p>
+        <pre><code>python generate_paper_tables.py</code></pre>
+
+        <h3>Step 4: Generate Paper Figures</h3>
+        <p>Run the figure generation script to create all figures used in the paper.</p>
+        <pre><code>python generate_all_figures.py</code></pre>
+
+        <h3>Step 5: Run the Real-World Case Study</h3>
+        <p>Execute the case study script to validate the R-Metric on a real model fine-tuning task. This script is self-contained and will produce its own results CSV and plot.</p>
+        <pre><code>python run_case_study.py</code></pre>
+
+        <h2>Citation</h2>
+        <p>If you use this work, please cite our paper:</p>
+        <pre><code>@inproceedings{anonymous2025proactive,
+  title={A Proactive Reliability Metric for Detecting Failures in Language Model Training},
+  author={Anonymous},
+  booktitle={Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: Industry Track},
+  year={2025},
+  publisher={Association for Computational Linguistics}
+}</code></pre>
+    </main>
+</body>
+</html>

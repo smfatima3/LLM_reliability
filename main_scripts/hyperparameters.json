@@ -1,0 +1,56 @@
+{
+  "simulation_study": {
+    "model_architectures": [
+      "Llama-3-8B",
+      "Mistral-7B",
+      "GPT-4-MoE"
+    ],
+    "dataset": "SlimPajama-subset (Simulated)",
+    "num_workers": 8,
+    "total_training_steps": 5000,
+    "eval_every_n_steps": 100,
+    "r_metric_weights": {
+      "lambda": 0.40,
+      "sigma_squared": 0.35,
+      "delta_l": 0.25
+    },
+    "alert_threshold": 0.57,
+    "fault_types": [
+      "EXPERT_FAILURE",
+      "ROUTER_IMBALANCE",
+      "GRADIENT_EXPLOSION",
+      "LR_SPIKE",
+      "NONE"
+    ],
+    "fault_injection_params": {
+      "expert_failure": {
+        "expert_to_kill": 2
+      },
+      "router_imbalance": {
+        "imbalance_factor": 0.7
+      },
+      "lr_spike": {
+        "lr_multiplier": 15.0
+      }
+    }
+  },
+  "real_world_case_study": {
+    "model_name": "Qwen/Qwen2.5-3B-Instruct",
+    "dataset_name": "OpenCoder-LLM/opc-sft-stage2",
+    "dataset_config": "educational_instruct",
+    "max_steps": 800,
+    "eval_every_n_steps": 20,
+    "batch_size": 4,
+    "learning_rate": 5e-05,
+    "fault_injection": {
+      "type": "LR_SPIKE",
+      "trigger_step": 400,
+      "lr_spike_factor": 15.0,
+      "duration_steps": 20
+    },
+    "monitoring": {
+      "alert_threshold": 0.57,
+      "loss_history_window": 10
+    }
+  }
+}
