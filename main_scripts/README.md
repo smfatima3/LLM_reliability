@@ -46,32 +46,14 @@ Note: The graphviz library also requires a system-level installation. On Debian/
 Step 2: Run the Simulation Study
 Execute the main experiment script. This will generate the log files for all 720 runs and save them into subdirectories (e.g., logs_FULL_METRIC/).
 
-python run_modern_experiments.py
+python real_simulator.py
 
 (This is a long-running process and will take a significant amount of time to complete.)
 
 Step 3: Generate Paper Tables
 Once the simulations are complete, run the analysis script to generate the performance tables from the logs.
 
-python generate_paper_tables.py
+python All_tables_generator.py
 
-Step 4: Generate Paper Figures
-Run the figure generation script to create all figures used in the paper.
 
-python generate_all_figures.py
 
-Step 5: Run the Real-World Case Study
-Execute the case study script to validate the R-Metric on a real model fine-tuning task. This script is self-contained and will produce its own results CSV and plot.
-
-python run_case_study.py
-
-Citation
-If you use this work, please cite our paper:
-
-@inproceedings{anonymous2025proactive,
-  title={A Proactive Reliability Metric for Detecting Failures in Language Model Training},
-  author={Anonymous},
-  booktitle={Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: Industry Track},
-  year={2025},
-  publisher={Association for Computational Linguistics}
-}
