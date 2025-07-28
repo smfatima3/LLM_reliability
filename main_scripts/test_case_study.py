@@ -1,4 +1,4 @@
-# test_case_study.py
+# test_case_study.py for GPT-2 study
 """
 Test script to run a minimal case study
 """
