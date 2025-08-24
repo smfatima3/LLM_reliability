@@ -5,7 +5,7 @@ Simplified script to run Qwen case study with optimal settings
 
 import os
 import torch
-from case_study_qwen import ExperimentConfig, CaseStudyTrainer
+from case_study import ExperimentConfig, CaseStudyTrainer
 
 def run_qwen_case_study(model_size="auto", custom_config=None):
     """
@@ -21,10 +21,8 @@ def run_qwen_case_study(model_size="auto", custom_config=None):
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
             if gpu_memory < 8:
                 model_size = "0.5B"
-            elif gpu_memory < 16:
-                model_size = "1.5B"
             else:
-                model_size = "7B"
+                model_size = "4B"
         else:
             model_size = "0.5B"  # CPU mode
     
@@ -37,15 +35,8 @@ def run_qwen_case_study(model_size="auto", custom_config=None):
             "use_8bit": False,
             "max_seq_length": 256
         },
-        "1.5B": {
-            "model_name": "Qwen/Qwen2-1.5B-Instruct",
-            "batch_size": 2,
-            "gradient_accumulation_steps": 2,
-            "use_8bit": True,
-            "max_seq_length": 384
-        },
-        "7B": {
-            "model_name": "Qwen/Qwen2.5-7B-Instruct",
+        "4B": {
+            "model_name": "Qwen/Qwen3-4B",
             "batch_size": 1,
             "gradient_accumulation_steps": 4,
             "use_8bit": True,
